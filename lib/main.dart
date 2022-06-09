@@ -1,5 +1,3 @@
-import 'dart:math';
-
 import 'package:untitled1/src/aquarium.dart';
 
 main() {

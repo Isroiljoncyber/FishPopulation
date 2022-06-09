@@ -1,9 +1,10 @@
+import 'dart:ffi';
 import 'dart:io';
 import 'dart:math';
-
 import 'package:untitled1/src/actions/aquarium_action.dart';
 import 'package:untitled1/src/actions/fish_actions.dart';
 import 'package:untitled1/src/fish.dart';
+import 'package:untitled1/src/shark.dart';
 import 'package:untitled1/src/utils/fish_type.dart';
 import 'package:untitled1/src/utils/utilits.dart';
 
@@ -38,6 +39,9 @@ class Aquarium with Utils implements AquariumActionInterface {
     fishBList.add(fishB.fishName);
 
     onPrintHowManyFishOnTheAquarium(getFishASize(), getFishBSize());
+
+    Shark(this);
+
   }
 
   @override
@@ -66,75 +70,101 @@ class Aquarium with Utils implements AquariumActionInterface {
   @override
   onChosenFish(FishType type, String nameFish) {
     try {
-      // random fish type bo`lishi kerak
+      FishActionInterface? chosenFishAction;
       String newFishName = "";
-      if (type == FishType.fishA) {
-        var randomFishBName = fishBList[_random.nextInt(getFishBSize())];
-        var fishBAction = allFishList[randomFishBName];
-        if (fishBAction?.getWilling()) {
-          String parentName = getSpittedName(nameFish) +
-              getSpittedName(fishBAction?.getFishName());
-          newFishName = fishBAction?.onGenerateNewName(parentName);
-        }
-      } else {
-        // FishB ni yaratish
-        var randomFishAName = fishAList[_random.nextInt(getFishASize())];
-        var fishAAction = allFishList[randomFishAName];
-        if (fishAAction?.getWilling()) {
-          String parentName = getSpittedName(nameFish) +
-              getSpittedName(fishAAction?.getFishName());
-          newFishName = fishAAction?.onGenerateNewName(parentName);
-        }
+      String chosenFishName;
+
+      chosenFishName = fishBList[_random.nextInt(getFishBSize())];
+
+      if (type == FishType.fishB) {
+        chosenFishName = fishAList[_random.nextInt(getFishASize())];
       }
-      generateNewFish(newFishName);
-      onPrintHowManyFishOnTheAquarium(getFishASize(), getFishBSize());
+
+      chosenFishAction = allFishList[chosenFishName];
+      if (chosenFishAction?.getWilling()) {
+        newFishName = getSpittedName(nameFish) +
+            getSpittedName(chosenFishAction?.getFishName());
+        findHowManyNewFishWillBeBorn(newFishName);
+      }
     } on Exception catch (e) {
       print("Error: Aquarium => onChosenFish => $e");
     }
   }
 
-  void generateNewFish(String newFishName) {
-    if (getFishType() == FishType.fishA) {
-      Fish newFishA = Fish(
-          fishType: FishType.fishA,
-          fishName: newFishName,
-          lifeTimeBegin: getBeginningLiveTime(),
-          lifeTimeEnd: lifeEndTime,
-          aquariumAction: this);
-      allFishList[newFishA.fishName] = newFishA;
-      fishAList.add(newFishName);
-      onLivePrintMessage(FishType.fishA, newFishName);
-    } else {
-      Fish newFishB = Fish(
-          fishType: FishType.fishB,
-          fishName: newFishName,
-          lifeTimeBegin: getBeginningLiveTime(),
-          lifeTimeEnd: lifeEndTime,
-          aquariumAction: this);
-      allFishList[newFishB.fishName] = newFishB;
-      fishBList.add(newFishName);
-      onLivePrintMessage(FishType.fishB, newFishName);
+  void findHowManyNewFishWillBeBorn(String newFishName) {
+    try {
+      var randomNewFishCount = _random.nextInt(2) + 1;
+      if (getAllFishSize() > 20) {
+        randomNewFishCount = _random.nextInt(1) + 1;
+      }
+      for (int i = 0; i < randomNewFishCount; i++) {
+        generateNewFish(newFishName);
+      }
+    } on Exception catch (e) {
+      print("Error: Aquarium => findHowManyNewFishWillBeBorn => $e");
     }
   }
 
+  void generateNewFish(String newFishName) {
+    FishType chosenFishType = getFishType();
+
+    Fish newFish = Fish(
+        fishType: chosenFishType,
+        fishName: newFishName,
+        lifeTimeBegin: getBeginningLiveTime(),
+        lifeTimeEnd: lifeEndTime,
+        aquariumAction: this,
+        isParentName: true);
+
+    if (chosenFishType == FishType.fishA) {
+      fishAList.add(newFish.fishName);
+    } else {
+      fishBList.add(newFish.fishName);
+    }
+    allFishList[newFish.fishName] = newFish;
+    onPrintHowManyFishOnTheAquarium(getFishASize(), getFishBSize());
+  }
+
   @override
-  onDead(String? name, FishType deadFishType) {
+  onSharkChooseFish() {
+    String chosenFishName;
+
+    chosenFishName = fishBList[_random.nextInt(getFishBSize())];
+    if (getFishType() == FishType.fishA) {
+      chosenFishName = fishAList[_random.nextInt(getFishASize())];
+    }
+
+    if (getFishASize() > 20 && getFishASize() > getFishBSize()) {
+      chosenFishName = fishAList[_random.nextInt(getFishASize())];
+    }
+    if (getFishBSize() > 20 && getFishBSize() > getFishASize()) {
+      chosenFishName = fishBList[_random.nextInt(getFishBSize())];
+    }
+
+    var chosenFishAction = allFishList[chosenFishName];
+    chosenFishAction?.onDead(byShark: true);
+  }
+
+  @override
+  onDead({String? name, FishType? deadFishType, bool? isShark = false}) {
     try {
+      String log = "time over";
       if (deadFishType == FishType.fishA) {
         fishAList.remove(name);
       } else {
         fishBList.remove(name);
       }
       allFishList.remove(name);
-      onDeadPrintMessage(deadFishType, name!, "time over");
+      countDeadFish++;
+      if (isShark!) {
+        log = "eaten by Shark";
+      }
+      onDeadPrintMessage(deadFishType!, name!, log, countDeadFish);
       onPrintHowManyFishOnTheAquarium(getFishASize(), getFishBSize());
     } on Exception catch (e) {
       print("Error: Aquarium => dead => $e");
     }
   }
-
-  @override
-  showProcessOfPopulation() {}
 
   @override
   FishType getFishType() {
