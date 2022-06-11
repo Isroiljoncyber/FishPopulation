@@ -1,20 +1,21 @@
-import 'dart:ffi';
 import 'dart:io';
 import 'dart:math';
+import 'package:untitled1/main.dart';
 import 'package:untitled1/src/actions/aquarium_action.dart';
-import 'package:untitled1/src/actions/fish_actions.dart';
 import 'package:untitled1/src/fish.dart';
+import 'package:untitled1/src/model/fish_model.dart';
 import 'package:untitled1/src/shark.dart';
 import 'package:untitled1/src/utils/fish_type.dart';
 import 'package:untitled1/src/utils/utilits.dart';
 
-class Aquarium with Utils implements AquariumActionInterface {
+class Aquarium extends Utils implements AquariumActionInterface {
   final Random _random = Random.secure();
   final int lifeEndTime = 60;
 
-  Map<String, FishActionInterface> allFishList = {};
+  Map<String, Fish> allFishList = {};
   List<String> fishAList = [];
   List<String> fishBList = [];
+  List<FishModel> fishHiveBoxList = [];
   int countDeadFish = 0;
 
   onStartPopulation() {
@@ -41,7 +42,6 @@ class Aquarium with Utils implements AquariumActionInterface {
     onPrintHowManyFishOnTheAquarium(getFishASize(), getFishBSize());
 
     Shark(this);
-
   }
 
   @override
@@ -68,44 +68,53 @@ class Aquarium with Utils implements AquariumActionInterface {
   }
 
   @override
-  onChosenFish(FishType type, String nameFish) {
+  onChosenFish(FishType type, String nameFish, int chosenTime) {
     try {
-      FishActionInterface? chosenFishAction;
+      Map willHistory = {};
+      willHistory['attemptTime'] = chosenTime;
+
+      Fish chosenFish;
       String newFishName = "";
-      String chosenFishName;
 
-      chosenFishName = fishBList[_random.nextInt(getFishBSize())];
-
+      String chosenFishName = fishBList[_random.nextInt(getFishBSize())];
+      willHistory['toWhom'] = chosenFishName;
       if (type == FishType.fishB) {
         chosenFishName = fishAList[_random.nextInt(getFishASize())];
       }
-
-      chosenFishAction = allFishList[chosenFishName];
-      if (chosenFishAction?.getWilling()) {
-        newFishName = getSpittedName(nameFish) +
-            getSpittedName(chosenFishAction?.getFishName());
-        findHowManyNewFishWillBeBorn(newFishName);
+      chosenFish = allFishList[chosenFishName];
+      var willResult = false;
+      if (chosenFish.getWilling()) {
+        willResult = true;
+        newFishName =
+            getSpittedName(nameFish) + getSpittedName(chosenFish.getFishName());
+        findHowManyNewFishWillBeBorn(
+            newFishName, nameFish + chosenFish.getFishName());
       }
+      onWillingPrintMessage(type, willResult);
+
+      willHistory["willResult"] = willResult ? "Accepted" : "Canceled";
+      Fish requestedFish = allFishList[nameFish];
+      requestedFish.willHistory.add(willHistory);
     } on Exception catch (e) {
       print("Error: Aquarium => onChosenFish => $e");
     }
   }
 
-  void findHowManyNewFishWillBeBorn(String newFishName) {
+  void findHowManyNewFishWillBeBorn(String newFishName, String parentName) {
     try {
       var randomNewFishCount = _random.nextInt(2) + 1;
       if (getAllFishSize() > 20) {
         randomNewFishCount = _random.nextInt(1) + 1;
       }
       for (int i = 0; i < randomNewFishCount; i++) {
-        generateNewFish(newFishName);
+        generateNewFish(newFishName, parentName);
       }
     } on Exception catch (e) {
       print("Error: Aquarium => findHowManyNewFishWillBeBorn => $e");
     }
   }
 
-  void generateNewFish(String newFishName) {
+  void generateNewFish(String newFishName, parentName) {
     FishType chosenFishType = getFishType();
 
     Fish newFish = Fish(
@@ -114,7 +123,7 @@ class Aquarium with Utils implements AquariumActionInterface {
         lifeTimeBegin: getBeginningLiveTime(),
         lifeTimeEnd: lifeEndTime,
         aquariumAction: this,
-        isParentName: true);
+        parentName: parentName);
 
     if (chosenFishType == FishType.fishA) {
       fishAList.add(newFish.fishName);
@@ -122,6 +131,8 @@ class Aquarium with Utils implements AquariumActionInterface {
       fishBList.add(newFish.fishName);
     }
     allFishList[newFish.fishName] = newFish;
+
+    onLivePrintMessage(chosenFishType, newFish.getFishName());
     onPrintHowManyFishOnTheAquarium(getFishASize(), getFishBSize());
   }
 
@@ -146,9 +157,15 @@ class Aquarium with Utils implements AquariumActionInterface {
   }
 
   @override
-  onDead({String? name, FishType? deadFishType, bool? isShark = false}) {
+  onDead({String name, FishType deadFishType, bool isShark = false}) {
     try {
       String log = "time over";
+      if (isShark) {
+        log = "eaten by Shark";
+      }
+      allFishList[name].deathReason = log;
+      addToHive(name);
+
       if (deadFishType == FishType.fishA) {
         fishAList.remove(name);
       } else {
@@ -156,10 +173,8 @@ class Aquarium with Utils implements AquariumActionInterface {
       }
       allFishList.remove(name);
       countDeadFish++;
-      if (isShark!) {
-        log = "eaten by Shark";
-      }
-      onDeadPrintMessage(deadFishType!, name!, log, countDeadFish);
+
+      onDeadPrintMessage(deadFishType, name, log, countDeadFish);
       onPrintHowManyFishOnTheAquarium(getFishASize(), getFishBSize());
     } on Exception catch (e) {
       print("Error: Aquarium => dead => $e");
@@ -186,5 +201,23 @@ class Aquarium with Utils implements AquariumActionInterface {
       return 10;
     }
     return 30;
+  }
+
+  addToHive(String name){
+    Fish fish = allFishList[name];
+    fishHiveBoxList.add(FishModel(
+        parentName: fish.parentName,
+        fishType: fish.fishType.toString(),
+        fishName: fish.getFishName(),
+        actualLifeTime: fish.actualLifeTime,
+        chooseOpportunity: fish.chooseOpportunity,
+        dateTimeBirth: fish.dateTimeBirth,
+        dateTimeDeath: fish.dateTimeDeath,
+        deathReason: fish.deathReason,
+        willHistory: fish.willHistory));
+    if (fishHiveBoxList.length > 20) {
+      addAllBox<FishModel>(fishBox, fishHiveBoxList);
+      fishHiveBoxList.clear();
+    }
   }
 }

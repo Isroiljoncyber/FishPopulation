@@ -5,6 +5,6 @@ class FishActionInterface {
   getWilling(){}
   onLive(){}
   onChoose(){}
-  onDead({bool? byShark}){}
+  onDead({bool byShark}){}
 
 }

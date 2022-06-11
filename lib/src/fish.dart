@@ -1,45 +1,53 @@
 import 'dart:async';
 import 'dart:math';
 
+import 'package:hive/hive.dart';
 import 'package:untitled1/src/actions/aquarium_action.dart';
 import 'package:untitled1/src/actions/fish_actions.dart';
 import 'package:untitled1/src/utils/fish_type.dart';
 import 'package:untitled1/src/utils/utilits.dart';
 
-class Fish with Utils implements FishActionInterface {
+class Fish implements FishActionInterface {
   final Random _random = Random.secure();
   List<Timer> listTimer = [];
+  AquariumActionInterface aquariumAction;
+  int lifeTimeBegin = 0;
+  int lifeTimeEnd = 0;
 
-  AquariumActionInterface? aquariumAction;
-  FishType? fishType;
-  bool? isParentName;
-  int? lifeTimeBegin = 0;
-  int? lifeTimeEnd = 0;
-
-  int actualLifeTime = 0;
-  String fishName = "";
-  DateTime? dateTimeBirth ;
-  DateTime? dateTimeDeath ;
+  // @HiveField(0)
+  String fishName;
+  // @HiveField(1)
+  DateTime dateTimeBirth;
+  // @HiveField(2)
+  int actualLifeTime;
+  // @HiveField(3)
+  FishType fishType;
+  // @HiveField(4)
+  String parentName;
+  // @HiveField(5)
+  int chooseOpportunity;
+  // @HiveField(6)
+  DateTime dateTimeDeath;
+  // @HiveField(7)
+  String deathReason;
+  // @HiveField(8)
+  List<Map> willHistory = [];
 
   Fish(
       {this.fishType,
-      required this.fishName,
+      this.fishName,
       this.lifeTimeBegin,
       this.lifeTimeEnd,
       this.aquariumAction,
-      this.isParentName = false}) {
-
+      this.parentName = ""}) {
     actualLifeTime =
-        _random.nextInt(lifeTimeEnd! - lifeTimeBegin!) + lifeTimeBegin!;
+        _random.nextInt(lifeTimeEnd - lifeTimeBegin) + lifeTimeBegin;
 
     dateTimeBirth = DateTime.now();
 
-    if (isParentName!) {
+    if (parentName.isNotEmpty) {
       fishName = onGenerateNewName(fishName);
     }
-
-    onLivePrintMessage(fishType!, fishName);
-
     onLive();
   }
 
@@ -54,17 +62,20 @@ class Fish with Utils implements FishActionInterface {
   onChoose() {
     try {
       int lastTime = 0;
-      int chooseOpportunity = _random.nextInt(1) + 1;
+      chooseOpportunity = _random.nextInt(1) + 1;
 
-      if (aquariumAction?.getAllFishSize() < 20) {
+      if (aquariumAction.getAllFishSize() < 20) {
         chooseOpportunity = _random.nextInt(2) + 1;
       }
 
       for (int i = 0; i < chooseOpportunity; i++) {
         int chooseTime = _random.nextInt(actualLifeTime);
         if (lastTime != chooseTime) {
-          Timer timer = Timer(Duration(seconds: chooseTime),
-              () => {aquariumAction?.onChosenFish(fishType!, fishName)});
+          Timer timer = Timer(
+              Duration(seconds: chooseTime),
+              () => {
+                    aquariumAction?.onChosenFish(fishType, fishName, chooseTime)
+                  });
           listTimer.add(timer);
           lastTime = chooseTime;
         } else {
@@ -78,14 +89,14 @@ class Fish with Utils implements FishActionInterface {
   }
 
   @override
-  onDead({bool? byShark = false}) {
+  onDead({bool byShark = false}) {
     try {
       for (var element in listTimer) {
         element.cancel();
       }
       dateTimeDeath = DateTime.now();
       aquariumAction?.onDead(
-          name: fishName, deadFishType: fishType!, isShark: byShark);
+          name: fishName, deadFishType: fishType, isShark: byShark);
     } on Exception catch (e) {
       print("Error: fish => onDead => $e");
     }
@@ -94,14 +105,9 @@ class Fish with Utils implements FishActionInterface {
   @override
   bool getWilling() {
     var result = _random.nextBool();
-    if (aquariumAction!.getAllFishSize() < 20) {
+    if (aquariumAction.getAllFishSize() < 20) {
       result = true;
     }
-    if (result) {
-      onWillingPrintMessage(fishType!, true);
-      return result;
-    }
-    onWillingPrintMessage(fishType!, false);
     return result;
   }
 
@@ -114,5 +120,14 @@ class Fish with Utils implements FishActionInterface {
   @override
   String getFishName() {
     return fishName;
+  }
+
+  final String _chars =
+      'AaBbCcDdEeFfGgHhIiJjKkLlMmNnOoPpQqRrSsTtUuVvWwXxYyZz1234567890';
+  final Random _rnd = Random();
+
+  String getRandomString(int length) {
+    return String.fromCharCodes(Iterable.generate(
+        length, (_) => _chars.codeUnitAt(_rnd.nextInt(_chars.length))));
   }
 }
